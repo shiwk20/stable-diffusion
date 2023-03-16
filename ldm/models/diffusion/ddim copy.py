@@ -53,18 +53,6 @@ class DDIMSampler(object):
                         1 - self.alphas_cumprod / self.alphas_cumprod_prev))
         self.register_buffer('ddim_sigmas_for_original_num_steps', sigmas_for_original_sampling_steps)
 
-    # https://github.com/huggingface/diffusers/pull/2528/files
-    def _threshold_sample(self, sample: torch.FloatTensor) -> torch.FloatTensor:
-        # Dynamic thresholding in https://arxiv.org/abs/2205.11487
-        dynamic_max_val = (
-            sample.flatten(1)
-            .abs()
-            .quantile(self.dynamic_thresholding_ratio, dim=1)
-            .clamp_min(self.sample_max_value)
-            .view(-1, *([1] * (sample.ndim - 1)))
-        )
-        return sample.clamp(-dynamic_max_val, dynamic_max_val) / dynamic_max_val
-    
     @torch.no_grad()
     def sample(self,
                S,
@@ -85,22 +73,11 @@ class DDIMSampler(object):
                verbose=True,
                x_T=None,
                log_every_t=100,
-               clip_sample: bool = False,
-               thresholding: bool = False,
-               dynamic_thresholding_ratio: float = 0.995,
-               clip_sample_range: float = 1.0,
-               sample_max_value: float = 1.0,
                unconditional_guidance_scale=1.,
                unconditional_conditioning=None,
                # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...
                **kwargs
                ):
-        self.clip_sample = clip_sample
-        self.thresholding = thresholding
-        self.dynamic_thresholding_ratio = dynamic_thresholding_ratio
-        self.clip_sample_range = clip_sample_range
-        self.sample_max_value = sample_max_value
-        
         if conditioning is not None:
             if isinstance(conditioning, dict):
                 cbs = conditioning[list(conditioning.keys())[0]].shape[0]
@@ -218,15 +195,6 @@ class DDIMSampler(object):
         pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
         if quantize_denoised:
             pred_x0, _, *_ = self.model.first_stage_model.quantize(pred_x0)
-            
-        if self.clip_sample:
-            pred_x0 = pred_x0.clamp(
-                -self.clip_sample_range, self.clip_sample_range
-            )
-
-        if self.thresholding:
-            pred_x0 = self._threshold_sample(pred_x0)
-            
         # direction pointing to x_t
         dir_xt = (1. - a_prev - sigma_t**2).sqrt() * e_t
         noise = sigma_t * noise_like(x.shape, device, repeat_noise) * temperature

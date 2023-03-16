@@ -255,7 +255,7 @@ def main():
     print('n_iter', n_iter)
     print('start loop')
     with torch.no_grad():
-        with model.module.ema_scope("Plotting"):
+        with model.module.ema_scope():
             for i in tqdm(range(n_iter)):
                 if i % num_tasks != device:
                     continue
@@ -267,6 +267,10 @@ def main():
                                             conditioning=None,
                                             batch_size=batch_size,
                                             shape=shape,
+                                            sample_max_value = 2,
+                                            clip_sample = False,
+                                            thresholding = True,
+                                            unconditional_guidance_scale=1.,
                                             unconditional_conditioning=None, 
                                             verbose = False,
                                             eta=opt.eta)
