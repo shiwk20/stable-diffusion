@@ -2,6 +2,10 @@ data/
 
 *.ckpt
 
+*.npz
+
+*.pt
+
 checkpoints/
 
 __pycache__/
