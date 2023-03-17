@@ -218,11 +218,6 @@ class DDIMSampler(object):
         pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
         if quantize_denoised:
             pred_x0, _, *_ = self.model.first_stage_model.quantize(pred_x0)
-            
-        if self.clip_sample:
-            pred_x0 = pred_x0.clamp(
-                -self.clip_sample_range, self.clip_sample_range
-            )
 
         if self.thresholding:
             pred_x0 = self._threshold_sample(pred_x0)
