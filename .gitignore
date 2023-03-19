@@ -6,6 +6,8 @@ data/
 
 *.pt
 
+tmp.*
+
 checkpoints/
 
 __pycache__/
