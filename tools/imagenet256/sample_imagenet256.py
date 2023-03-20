@@ -259,67 +259,116 @@ def main():
     os.makedirs(sample_path, exist_ok=True)
     
     shape = (model.module.channels, model.module.image_size, model.module.image_size)
-    n_rows = opt.n_rows if opt.n_rows > 0 else opt.batch_size // 2
-    base_count = 0
-    grid_count = 0
-    n_iter = opt.max_img // opt.batch_size if opt.max_img % opt.batch_size == 0 else opt.max_img // opt.batch_size + 1
-    print('n_iter', n_iter)
-    print('start loop')
-    with torch.no_grad():
-        with model.module.ema_scope():
-            for i in tqdm(range(n_iter)):
-                if i % num_tasks != device:
-                    continue
-                
-                batch_size = opt.batch_size if i < n_iter - 1 else opt.max_img - (n_iter - 1) * opt.batch_size
-                uc = None
-                if opt.scale != 1.0:
-                    uc = model.module.get_learned_conditioning(
-                        {model.module.cond_stage_key: torch.tensor(batch_size*[NUM_CLASSES]).to(model.device)}
-                        )
-                all_samples = list()
-                xc = torch.randint(0, NUM_CLASSES, (batch_size,)).to(model.device)
-                c = model.module.get_learned_conditioning({model.module.cond_stage_key: xc})
-                
-                samples, _ = sampler.sample(S=opt.steps,
-                                            conditioning=c,
-                                            batch_size=batch_size,
-                                            shape=shape,
-                                            sample_max_value = 1.,
-                                            dynamic_thresholding_ratio = 1.0,
-                                            clip_sample = False,
-                                            thresholding = False,
-                                            unconditional_guidance_scale=opt.scale,
-                                            unconditional_conditioning=uc, 
-                                            verbose = False,
-                                            eta=opt.eta)
-                x_samples = model.module.decode_first_stage(samples)
-                x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)
-                x_samples = x_samples.cpu().permute(0, 2, 3, 1).numpy()
-                x_image_torch = torch.from_numpy(x_samples).permute(0, 3, 1, 2)
-                
-                for idx, x_sample in enumerate(x_image_torch):
-                    x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
-                    img = Image.fromarray(x_sample.astype(np.uint8))
-                    img = img.resize((opt.rsize, opt.rsize), resample=Image.BICUBIC)
-                    img.save(os.path.join(sample_path, f"{base_count:04}_gpu{device}.png"))
-                    base_count += 1
-                print('base_count', base_count)
-                if not opt.skip_grid and batch_size == opt.batch_size:
-                    all_samples.append(x_image_torch)
-                    # additionally, save as grid
-                    grid = torch.stack(all_samples, 0)
-                    grid = rearrange(grid, 'n b c h w -> (n b) c h w')
-                    grid = make_grid(grid, nrow=n_rows)
-                    # to image
-                    grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-                    img = Image.fromarray(grid.astype(np.uint8))
-                    img.save(os.path.join(outpath, f'grid-{grid_count:04}_gpu{device}.png'))
-                    grid_count += 1
+    if not opt.save_npz:
+        n_rows = opt.n_rows if opt.n_rows > 0 else opt.batch_size // 2
+        base_count = 0
+        grid_count = 0
+        n_iter = opt.max_img // opt.batch_size if opt.max_img % opt.batch_size == 0 else opt.max_img // opt.batch_size + 1
+        print('n_iter', n_iter)
+        print('start loop')
+        with torch.no_grad():
+            with model.module.ema_scope():
+                for i in tqdm(range(n_iter)):
+                    if i % num_tasks != device:
+                        continue
                     
+                    batch_size = opt.batch_size if i < n_iter - 1 else opt.max_img - (n_iter - 1) * opt.batch_size
+                    uc = None
+                    if opt.scale != 1.0:
+                        uc = model.module.get_learned_conditioning(
+                            {model.module.cond_stage_key: torch.tensor(batch_size*[NUM_CLASSES]).to(model.device)}
+                            )
+                    all_samples = list()
+                    xc = torch.randint(0, NUM_CLASSES, (batch_size,)).to(model.device)
+                    c = model.module.get_learned_conditioning({model.module.cond_stage_key: xc})
 
+                    samples, _ = sampler.sample(S=opt.steps,
+                                                conditioning=c,
+                                                batch_size=batch_size,
+                                                shape=shape,
+                                                sample_max_value = 1.,
+                                                dynamic_thresholding_ratio = 1.0,
+                                                clip_sample = False,
+                                                thresholding = False,
+                                                unconditional_guidance_scale=opt.scale,
+                                                unconditional_conditioning=uc, 
+                                                verbose = False,
+                                                eta=opt.eta)
+                    x_samples = model.module.decode_first_stage(samples)
+                    x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)
+                    x_samples = x_samples.cpu().permute(0, 2, 3, 1).numpy()
+                    x_image_torch = torch.from_numpy(x_samples).permute(0, 3, 1, 2)
+
+                    for idx, x_sample in enumerate(x_image_torch):
+                        x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                        img = Image.fromarray(x_sample.astype(np.uint8))
+                        img = img.resize((opt.rsize, opt.rsize), resample=Image.BICUBIC)
+                        img.save(os.path.join(sample_path, f"{base_count:04}_gpu{device}.png"))
+                        base_count += 1
+                    print('base_count', base_count)
+                    if not opt.skip_grid and batch_size == opt.batch_size:
+                        all_samples.append(x_image_torch)
+                        # additionally, save as grid
+                        grid = torch.stack(all_samples, 0)
+                        grid = rearrange(grid, 'n b c h w -> (n b) c h w')
+                        grid = make_grid(grid, nrow=n_rows)
+                        # to image
+                        grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
+                        img = Image.fromarray(grid.astype(np.uint8))
+                        img.save(os.path.join(outpath, f'grid-{grid_count:04}_gpu{device}.png'))
+                        grid_count += 1
+    else:
+        assert opt.max_img % (opt.batch_size * num_tasks) == 0, "max_img must be divisible by batch_size * num_tasks"
+        print('sample image and save as npz')
+        all_images = []
+        all_labels = []
+        while len(all_images) * opt.batch_size < opt.max_img:
+            uc = None
+            if opt.scale != 1.0:
+                uc = model.module.get_learned_conditioning(
+                    {model.module.cond_stage_key: torch.tensor(batch_size*[NUM_CLASSES]).to(model.device)}
+                    )
+            xc = torch.randint(0, NUM_CLASSES, (batch_size,)).to(model.device)
+            c = model.module.get_learned_conditioning({model.module.cond_stage_key: xc})
+
+            sample, _ = sampler.sample(S=opt.steps,
+                                        conditioning=c,
+                                        shape=shape,
+                                        sample_max_value = 1.,
+                                        dynamic_thresholding_ratio = 1.0,
+                                        clip_sample = False,
+                                        thresholding = False,
+                                        unconditional_guidance_scale=opt.scale,
+                                        unconditional_conditioning=uc, 
+                                        verbose = False,
+                                        eta=opt.eta)
+            
+            sample = ((sample + 1) * 127.5).clamp(0, 255).to(torch.uint8)
+            sample = sample.permute(0, 2, 3, 1)
+            sample = sample.contiguous()
+
+            gathered_samples = [torch.zeros_like(sample) for _ in range(num_tasks)]
+            dist.all_gather(gathered_samples, sample)  # gather not supported with NCCL
+            all_images.extend([sample.cpu().numpy() for sample in gathered_samples])
+            gathered_labels = [
+                torch.zeros_like(xc) for _ in range(num_tasks)
+            ]
+            dist.all_gather(gathered_labels, xc)
+            all_labels.extend([labels.cpu().numpy() for labels in gathered_labels])
+            print('sampled', len(all_images) * opt.batch_size, 'images')
+
+        arr = np.concatenate(all_images, axis=0)
+        arr = arr[: opt.max_img]
+        label_arr = np.concatenate(all_labels, axis=0)
+        label_arr = label_arr[: opt.max_img]
+        if dist.get_rank() == 0:
+            shape_str = "x".join([str(x) for x in arr.shape])
+            out_path = os.path.join(outpath, f"samples_{shape_str}.npz")
+            print(f"saving to {out_path}")
+            np.savez(out_path, arr, label_arr)
+    
     print(f"Your samples are ready and waiting for you here: \n{outpath} \n"
-          f" \nEnjoy.")
+            f" \nEnjoy.")
 
 
 if __name__ == "__main__":
