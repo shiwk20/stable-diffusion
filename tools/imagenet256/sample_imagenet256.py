@@ -269,12 +269,12 @@ def main():
                 batch_size = opt.batch_size if i < n_iter - 1 else opt.max_img - (n_iter - 1) * opt.batch_size
                 uc = None
                 if opt.scale != 1.0:
-                    uc = model.get_learned_conditioning(
+                    uc = model.module.get_learned_conditioning(
                         {model.cond_stage_key: torch.tensor(batch_size*[NUM_CLASSES]).to(model.device)}
                         )
                 all_samples = list()
                 xc = torch.randint(0, NUM_CLASSES, (batch_size,)).to(model.device)
-                c = model.get_learned_conditioning({model.cond_stage_key: xc})
+                c = model.module.get_learned_conditioning({model.cond_stage_key: xc})
                 
                 samples, _ = sampler.sample(S=opt.steps,
                                             conditioning=c,
