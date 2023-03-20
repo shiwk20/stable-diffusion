@@ -270,11 +270,11 @@ def main():
                 uc = None
                 if opt.scale != 1.0:
                     uc = model.module.get_learned_conditioning(
-                        {model.cond_stage_key: torch.tensor(batch_size*[NUM_CLASSES]).to(model.device)}
+                        {model.module.cond_stage_key: torch.tensor(batch_size*[NUM_CLASSES]).to(model.device)}
                         )
                 all_samples = list()
                 xc = torch.randint(0, NUM_CLASSES, (batch_size,)).to(model.device)
-                c = model.module.get_learned_conditioning({model.cond_stage_key: xc})
+                c = model.module.get_learned_conditioning({model.module.cond_stage_key: xc})
                 
                 samples, _ = sampler.sample(S=opt.steps,
                                             conditioning=c,
