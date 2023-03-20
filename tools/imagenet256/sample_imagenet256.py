@@ -193,7 +193,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs\latent-diffusion\cin256-v2.yaml",
+        default="configs/latent-diffusion/cin256-v2.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
