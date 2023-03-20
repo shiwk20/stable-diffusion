@@ -145,6 +145,11 @@ def main():
         help="do not save a grid, only individual samples. Helpful when evaluating lots of samples",
     )
     parser.add_argument(
+        "--save_npz",
+        action='store_true',
+        help="save npz files to cal fid",
+    )
+    parser.add_argument(
         "--steps",
         type=int,
         default=20,
@@ -274,7 +279,6 @@ def main():
                         )
                 all_samples = list()
                 xc = torch.randint(0, NUM_CLASSES, (batch_size,)).to(model.device)
-                xc = torch.randint(25, 26, (batch_size,)).to(model.device)
                 c = model.module.get_learned_conditioning({model.module.cond_stage_key: xc})
                 
                 samples, _ = sampler.sample(S=opt.steps,
