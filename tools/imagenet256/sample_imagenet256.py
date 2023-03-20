@@ -24,7 +24,7 @@ from torch import autocast
 from ldm.util import instantiate_from_config
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
-# from ldm.models.diffusion.dpm_solver.sampler import DPMSolverSampler
+from ldm.models.diffusion.dpm_solver.sampler import DPMSolverSampler
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -193,13 +193,13 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="models/ldm/ffhq256/config.yaml",
+        default="configs\latent-diffusion\cin256-v2.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="models/ldm/ffhq256/model.ckpt",
+        default="models/ldm/cin256-v2/model.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
@@ -207,6 +207,12 @@ def main():
         type=int,
         default=42,
         help="the seed (for reproducible sampling)",
+    )
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=7.5,
+        help="unconditional guidance scale: eps = eps(x, empty) + scale * (eps(x, cond) - eps(x, empty))",
     )
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
@@ -219,7 +225,7 @@ def main():
     setup_for_distributed(is_main_process())
     device = get_rank()
     num_tasks = dist.get_world_size()
-    
+    NUM_CLASSES = 1000
     if opt.plms:
         opt.eta = 0
     if opt.plms and opt.dpm_solver:
@@ -261,18 +267,25 @@ def main():
                     continue
                 
                 batch_size = opt.batch_size if i < n_iter - 1 else opt.max_img - (n_iter - 1) * opt.batch_size
-                
+                uc = None
+                if opt.scale != 1.0:
+                    uc = model.get_learned_conditioning(
+                        {model.cond_stage_key: torch.tensor(batch_size*[NUM_CLASSES]).to(model.device)}
+                        )
                 all_samples = list()
+                xc = torch.randint(0, NUM_CLASSES, (batch_size,)).to(model.device)
+                c = model.get_learned_conditioning({model.cond_stage_key: xc})
+                
                 samples, _ = sampler.sample(S=opt.steps,
-                                            conditioning=None,
+                                            conditioning=c,
                                             batch_size=batch_size,
                                             shape=shape,
                                             sample_max_value = 1.,
                                             dynamic_thresholding_ratio = 1.0,
                                             clip_sample = False,
-                                            thresholding = True,
-                                            unconditional_guidance_scale=1.,
-                                            unconditional_conditioning=None, 
+                                            thresholding = False,
+                                            unconditional_guidance_scale=opt.scale,
+                                            unconditional_conditioning=uc, 
                                             verbose = False,
                                             eta=opt.eta)
                 x_samples = model.module.decode_first_stage(samples)
